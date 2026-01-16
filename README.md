@@ -2,6 +2,11 @@
 
 A simple and elegant web application that allows you to read text files with infinite scrolling.
 
+## 🌐 Live Demo
+
+**[View Live Demo](https://faizulr.github.io/Infinite-Text-Reader/)** - Try it now!
+
+
 ## Description
 
 Infinite Text Reader is a lightweight, browser-based tool designed to make reading text files easier and more enjoyable. Simply upload a .txt file and scroll through your content seamlessly without any interruptions.
