@@ -1,199 +1,358 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Text Reader</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, ZoomIn, ZoomOut, FileText, Moon, Sun, Loader2, Play, Pause, Gauge } from 'lucide-react';
+
+export default function InfiniteTextReader() {
+  const [text, setText] = useState('');
+  const [fontSize, setFontSize] = useState(24);
+  const [darkMode, setDarkMode] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [pdfLibLoaded, setPdfLibLoaded] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(false);
+  const [scrollSpeed, setScrollSpeed] = useState(30);
+  const fileInputRef = useRef(null);
+  const scrollIntervalRef = useRef(null);
+
+  useEffect(() => {
+    // Load PDF.js library
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = () => {
+      if (window['pdfjs-dist/build/pdf']) {
+        window['pdfjs-dist/build/pdf'].GlobalWorkerOptions.workerSrc = 
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        setPdfLibLoaded(true);
+      }
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, []);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    console.log('File selected:', file.name, file.type);
+    setFileName(file.name);
+    setLoading(true);
+
+    try {
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        if (!pdfLibLoaded) {
+          alert('PDF library is still loading. Please wait a moment and try again.');
+          setLoading(false);
+          return;
         }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .upload-section {
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .file-input-wrapper {
-            position: relative;
-            display: inline-block;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-        
-        .file-input-wrapper input[type="file"] {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-        
-        .file-input-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 30px;
-            border-radius: 50px;
-            font-size: 1.1em;
-            font-weight: bold;
-            transition: transform 0.3s ease;
-        }
-        
-        .file-input-wrapper:hover .file-input-button {
-            transform: scale(1.05);
-        }
-        
-        .text-display {
-            padding: 40px;
-            font-size: 1.2em;
-            line-height: 1.8;
-            color: #333;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            display: none;
-        }
-        
-        .text-display.active {
-            display: block;
-        }
-        
-        .controls {
-            padding: 20px;
-            background: #f8f9fa;
-            display: none;
-            justify-content: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .controls.active {
-            display: flex;
-        }
-        
-        .control-button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            background: #667eea;
-            color: white;
-            font-size: 1em;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-        
-        .control-button:hover {
-            background: #764ba2;
-        }
-        
-        .font-size-control {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .font-size-control input[type="range"] {
-            width: 150px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>∞ Infinite Text Reader</h1>
-            <p>Upload a text file and read with infinite scrolling</p>
-        </div>
-        
-        <div class="upload-section" id="uploadSection">
-            <div class="file-input-wrapper">
-                <input type="file" id="fileInput" accept=".txt">
-                <div class="file-input-button">Choose Text File</div>
+        await handlePDFFile(file);
+      } else if (file.name.toLowerCase().endsWith('.docx')) {
+        await handleDocxFile(file);
+      } else {
+        // Handle text files
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const content = event.target.result;
+          console.log('Text loaded, length:', content.length);
+          setText(content);
+          setLoading(false);
+        };
+        reader.onerror = (error) => {
+          console.error('FileReader error:', error);
+          alert('Error reading file');
+          setLoading(false);
+        };
+        reader.readAsText(file);
+      }
+    } catch (error) {
+      console.error('Error reading file:', error);
+      alert('Error reading file: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  const handlePDFFile = async (file) => {
+    try {
+      const pdfjsLib = window['pdfjs-dist/build/pdf'];
+      if (!pdfjsLib) {
+        throw new Error('PDF library not loaded');
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      console.log('PDF arrayBuffer size:', arrayBuffer.byteLength);
+      
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      console.log('PDF loaded, pages:', pdf.numPages);
+      
+      let fullText = '';
+      
+      // Extract text from each page
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n\n';
+        console.log(`Page ${pageNum} extracted, length:`, pageText.length);
+      }
+      
+      console.log('Total text extracted:', fullText.length);
+      setText(fullText);
+      setLoading(false);
+    } catch (error) {
+      console.error('PDF processing error:', error);
+      throw error;
+    }
+  };
+
+  const handleDocxFile = async (file) => {
+    try {
+      if (!window.mammoth) {
+        throw new Error('Mammoth library not available. Please use a text or PDF file.');
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await window.mammoth.extractRawText({ arrayBuffer });
+      console.log('DOCX text extracted:', result.value.length);
+      setText(result.value);
+      setLoading(false);
+    } catch (error) {
+      console.error('DOCX processing error:', error);
+      throw error;
+    }
+  };
+
+  const increaseFontSize = () => {
+    setFontSize(prev => Math.min(prev + 4, 72));
+  };
+
+  const decreaseFontSize = () => {
+    setFontSize(prev => Math.max(prev - 4, 12));
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(prev => !prev);
+  };
+
+  const toggleAutoScroll = () => {
+    setAutoScroll(prev => !prev);
+  };
+
+  const increaseScrollSpeed = () => {
+    setScrollSpeed(prev => Math.min(prev + 10, 100));
+  };
+
+  const decreaseScrollSpeed = () => {
+    setScrollSpeed(prev => Math.max(prev - 10, 10));
+  };
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (autoScroll) {
+      scrollIntervalRef.current = setInterval(() => {
+        window.scrollBy({
+          top: 1,
+          behavior: 'auto'
+        });
+      }, 101 - scrollSpeed);
+    } else {
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+      }
+    }
+
+    return () => {
+      if (scrollIntervalRef.current) {
+        clearInterval(scrollIntervalRef.current);
+      }
+    };
+  }, [autoScroll, scrollSpeed]);
+
+  return (
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} scroll-smooth`}>
+      {/* Fixed Header */}
+      <div className={`fixed top-0 left-0 right-0 z-10 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b shadow-sm backdrop-blur-sm bg-opacity-95`}>
+        <div className="max-w-4xl mx-auto px-4 py-3">
+          {/* Top row - File name and upload */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <FileText className="w-6 h-6" />
+              <span className="font-semibold truncate max-w-xs">
+                {fileName || 'Infinite Text Reader'}
+              </span>
             </div>
-            <p style="color: #666; margin-top: 10px;">Supported format: .txt</p>
-        </div>
-        
-        <div class="controls" id="controls">
-            <div class="font-size-control">
-                <label for="fontSize">Font Size:</label>
-                <input type="range" id="fontSize" min="12" max="32" value="19" step="1">
-                <span id="fontSizeValue">19px</span>
+            
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'
+              } text-white transition`}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">{loading ? 'Loading...' : 'Upload'}</span>
+            </button>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.pdf,.md,.doc,.docx"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </div>
+          
+          {/* Bottom row - Controls */}
+          <div className="flex items-center justify-between">
+            {/* Font controls */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={decreaseFontSize}
+                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition`}
+                title="Decrease font size"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              
+              <span className="text-xs font-medium min-w-10 text-center">
+                {fontSize}px
+              </span>
+              
+              <button
+                onClick={increaseFontSize}
+                className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition`}
+                title="Increase font size"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
             </div>
-            <button class="control-button" id="resetButton">Load New File</button>
+
+            {/* Auto-scroll controls */}
+            {text && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={decreaseScrollSpeed}
+                  className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition`}
+                  title="Slower"
+                  disabled={!autoScroll}
+                >
+                  <Gauge className="w-4 h-4" />
+                </button>
+                
+                <span className="text-xs font-medium min-w-10 text-center">
+                  {scrollSpeed}%
+                </span>
+                
+                <button
+                  onClick={increaseScrollSpeed}
+                  className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition`}
+                  title="Faster"
+                  disabled={!autoScroll}
+                >
+                  <Gauge className="w-4 h-4 rotate-180" />
+                </button>
+                
+                <button
+                  onClick={toggleAutoScroll}
+                  className={`p-2 rounded-lg ${
+                    autoScroll 
+                      ? (darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600')
+                      : (darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100')
+                  } transition`}
+                  title={autoScroll ? 'Pause auto-scroll' : 'Start auto-scroll'}
+                >
+                  {autoScroll ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
+            
+            {/* Dark mode */}
+            <button
+              onClick={toggleDarkMode}
+              className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition`}
+              title="Toggle dark mode"
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
-        
-        <div class="text-display" id="textDisplay"></div>
+      </div>
+
+      {/* Scrollable Content Area */}
+      <div className="pt-28 pb-12">
+        <div className="max-w-4xl mx-auto px-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+              <Loader2 className="w-12 h-12 animate-spin mb-4 text-blue-500" />
+              <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                Processing file...
+              </p>
+            </div>
+          ) : text ? (
+            <div
+              style={{ fontSize: `${fontSize}px`, lineHeight: '1.8' }}
+              className="whitespace-pre-wrap font-serif transition-all duration-300 ease-in-out"
+            >
+              {text}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+              <FileText className="w-16 h-16 mb-4 opacity-30" />
+              <h2 className="text-2xl font-semibold mb-2">
+                No file loaded
+              </h2>
+              <p className={`mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Upload a text or PDF file to start reading
+              </p>
+              <p className={`text-sm mb-6 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                Supported: .txt, .md, .pdf
+              </p>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+              >
+                <Upload className="w-5 h-5" />
+                Choose File
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Demo Text Button */}
+      {!text && !loading && (
+        <div className="fixed bottom-6 right-6">
+          <button
+            onClick={() => {
+              setText(`Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+
+Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit.
+
+At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi.
+
+Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet.
+
+Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. This is demo text to show how the infinite scrolling reader works with continuous text flow.`);
+              setFileName('Demo Text');
+            }}
+            className={`px-4 py-2 rounded-lg ${
+              darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+            } transition text-sm`}
+          >
+            Load Demo Text
+          </button>
+        </div>
+      )}
     </div>
-    
-    <script>
-        const fileInput = document.getElementById('fileInput');
-        const textDisplay = document.getElementById('textDisplay');
-        const uploadSection = document.getElementById('uploadSection');
-        const controls = document.getElementById('controls');
-        const fontSizeSlider = document.getElementById('fontSize');
-        const fontSizeValue = document.getElementById('fontSizeValue');
-        const resetButton = document.getElementById('resetButton');
-        
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file && file.type === 'text/plain') {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    const text = e.target.result;
-                    textDisplay.textContent = text;
-                    textDisplay.classList.add('active');
-                    uploadSection.style.display = 'none';
-                    controls.classList.add('active');
-                };
-                
-                reader.readAsText(file);
-            } else {
-                alert('Please select a valid text file (.txt)');
-            }
-        });
-        
-        fontSizeSlider.addEventListener('input', function() {
-            const size = this.value;
-            textDisplay.style.fontSize = size + 'px';
-            fontSizeValue.textContent = size + 'px';
-        });
-        
-        resetButton.addEventListener('click', function() {
-            textDisplay.textContent = '';
-            textDisplay.classList.remove('active');
-            uploadSection.style.display = 'block';
-            controls.classList.remove('active');
-            fileInput.value = '';
-        });
-    </script>
-</body>
-</html>
+  );
+}
